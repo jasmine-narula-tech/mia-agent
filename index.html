@@ -7,7 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center p-6">
-    <div class="max-w-2xl w-full bg-white rounded-xl shadow-lg p-8">
+    <div class="max-w-3xl w-full bg-white rounded-xl shadow-lg p-8">
         <h1 class="text-3xl font-bold text-gray-800 mb-2">MIA - Meeting Intelligent Assistant</h1>
         <p class="text-gray-500 mb-6">Upload a file or paste your meeting transcript below.</p>
 
@@ -32,14 +32,27 @@
         </form>
 
         <div id="results" class="mt-8 hidden space-y-4">
-            <h2 class="text-xl font-bold text-gray-800">Analysis</h2>
+            <h2 class="text-xl font-bold text-gray-800">Meeting Analysis</h2>
             <div id="summary" class="p-4 bg-gray-50 rounded-lg italic"></div>
+
+            <div id="metrics" class="space-y-2">
+                <p><strong>Tone:</strong> <span id="tone"></span></p>
+                <p><strong>Productivity Score:</strong> <span id="productivity"></span></p>
+                <p><strong>Engagement:</strong> <span id="engagement"></span></p>
+            </div>
+
+            <div id="blockers" class="space-y-2">
+                <strong>Blockers:</strong>
+                <ul id="blockersList"></ul>
+            </div>
+
             <div id="items" class="space-y-2"></div>
         </div>
     </div>
 
     <script>
     const form = document.getElementById('analyzeForm');
+
     form.onsubmit = async (e) => {
         e.preventDefault();
         const btn = document.getElementById('submitBtn');
@@ -48,31 +61,64 @@
         const resultsDiv = document.getElementById('results');
         const summaryDiv = document.getElementById('summary');
         const itemsDiv = document.getElementById('items');
+        const blockersUl = document.getElementById('blockersList');
         summaryDiv.innerText = '';
         itemsDiv.innerHTML = '';
+        blockersUl.innerHTML = '';
+        document.getElementById('tone').innerText = '';
+        document.getElementById('productivity').innerText = '';
+        document.getElementById('engagement').innerText = '';
         resultsDiv.classList.add('hidden');
 
         btn.innerText = "Analyzing...";
         btn.disabled = true;
 
         const formData = new FormData(form);
-        const response = await fetch('/analyze', { method: 'POST', body: formData });
-        const data = await response.json();
+        try {
+            const response = await fetch('/analyze', { method: 'POST', body: formData });
+            const data = await response.json();
 
-        btn.innerText = "Analyze Meeting";
-        btn.disabled = false;
+            btn.innerText = "Analyze Meeting";
+            btn.disabled = false;
 
-        if (response.ok) {
-            resultsDiv.classList.remove('hidden');
-            summaryDiv.innerText = data.summary;
-            itemsDiv.innerHTML = `
-                <p><strong>Action Items:</strong> ${data.action_items.join(', ')}</p>
-                <p><strong>Decisions:</strong> ${data.decisions.join(', ')}</p>
-            `;
-        } else {
-            alert("Error: " + data.detail);
+            if (response.ok) {
+                resultsDiv.classList.remove('hidden');
+
+                // Summary
+                summaryDiv.innerText = data.summary;
+
+                // Metrics
+                document.getElementById("tone").innerText = data.tone;
+                document.getElementById("productivity").innerText = data.productivity_score;
+                document.getElementById("engagement").innerText = JSON.stringify(data.engagement);
+
+                // Blockers
+                data.blockers.forEach(b => {
+                    const li = document.createElement("li");
+                    li.innerText = b;
+                    blockersUl.appendChild(li);
+                });
+
+                // Action Items
+                itemsDiv.innerHTML = data.action_items.map(a => 
+                    `<p>• ${a.task} (Owner: ${a.assigned_to}, Deadline: ${a.deadline || "N/A"})</p>`
+                ).join("");
+
+                // Decisions
+                const decisionsDiv = document.createElement("div");
+                decisionsDiv.innerHTML = `<p><strong>Decisions:</strong> ${data.decisions.join(', ')}</p>`;
+                itemsDiv.appendChild(decisionsDiv);
+
+            } else {
+                alert("Error: " + data.detail);
+            }
+
+        } catch (err) {
+            btn.innerText = "Analyze Meeting";
+            btn.disabled = false;
+            alert("Error: " + err.message);
         }
     };
-</script>
+    </script>
 </body>
 </html>

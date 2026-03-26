@@ -50,16 +50,27 @@ async def analyze_meeting(
         raise HTTPException(status_code=400, detail="No transcript provided")
 
     prompt = f"""
-    Analyze this meeting transcript. Return ONLY valid JSON:
-
-    {{
-      "summary": "string",
-      "action_items": ["string"],
-      "decisions": ["string"]
-    }}
+    Analyze this meeting transcript and return ONLY valid JSON in the specified schema.
 
     Transcript:
     {content}
+
+    JSON schema:
+    {{
+    "summary": "string",
+    "tone": "Positive / Neutral / Negative",
+    "productivity_score": 1-10,
+    "engagement": {{"speaker_name": "percent of speaking time"}},
+    "blockers": ["string"],
+    "action_items": [
+        {{
+        "task": "string",
+        "assigned_to": "string",
+        "deadline": "string or null"
+        }}
+    ],
+    "decisions": ["string"]
+    }}
     """
 
     try:
