@@ -1,63 +1,54 @@
 import os
 import json
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-import google.generativeai as genai
+from typing import Optional
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi.responses import HTMLResponse
+from google import genai
+from google.genai import types
 
 app = FastAPI(title="MIA - Meeting Intelligent Assistant")
 
-# 1. API Configuration
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    raise ValueError("Missing GEMINI_API_KEY environment variable")
+# 1. Initialize the new GenAI Client
+# It automatically looks for the GEMINI_API_KEY environment variable.
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-genai.configure(api_key=api_key)
-
-# 2. Updated Model (Gemini 3 Flash is the 2026 standard for speed/logic)
-# Note: 'gemini-1.5-flash' is retired. 
-MODEL_ID = "models/gemini-3-flash-preview" 
-
-model = genai.GenerativeModel(
-    model_name=MODEL_ID,
-    generation_config={
-        "response_mime_type": "application/json",
-        "temperature": 1.0  # Recommended default for Gemini 3 series
-    }
-)
-
-class MeetingRequest(BaseModel):
-    transcript: str
-
-@app.get("/")
-def home():
-    return {"message": "MIA is running on Gemini 3 🚀"}
-
-@app.post("/analyze-meeting")
-async def analyze(req: MeetingRequest):
-    if not req.transcript.strip():
-        raise HTTPException(status_code=400, detail="Transcript is empty")
-
-    prompt = f"""
-    Analyze this meeting transcript. Return a JSON object with:
-    - summary (string)
-    - action_items (list of strings)
-    - decisions (list of strings)
-
-    Transcript:
-    {req.transcript}
-    """
-
+@app.get("/", response_class=HTMLResponse)
+async def get_ui():
     try:
-        response = model.generate_content(prompt)
-        
-        if not response.text:
-            raise HTTPException(status_code=500, detail="AI returned no content")
+        with open("index.html", "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        return "<h1>index.html not found</h1>"
 
+@app.post("/analyze")
+async def analyze_meeting(
+    transcript_text: Optional[str] = Form(None),
+    transcript_file: Optional[UploadFile] = File(None)
+):
+    # 1. Extract content from either the text area or the uploaded file
+    content = ""
+    if transcript_file and transcript_file.filename:
+        file_bytes = await transcript_file.read()
+        content = file_bytes.decode("utf-8")
+    elif transcript_text:
+        content = transcript_text
+    
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="No transcript provided")
+
+    # 2. Call Gemini using the new SDK structure
+    try:
+        response = client.models.generate_content(
+        model="gemini-1.5-flash",
+        contents=f"Summarize this meeting transcript into JSON (summary, action_items, decisions): {content}",
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=1.0
+        )
+    )
+        
+        # In the new SDK, access text directly via response.text
         return json.loads(response.text)
 
     except Exception as e:
-        # If the model name itself is the issue, this will catch it
-        raise HTTPException(
-            status_code=500, 
-            detail=f"MIA Error: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"AI Error: {str(e)}")
