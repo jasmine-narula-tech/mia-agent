@@ -19,10 +19,12 @@ def home():
 @app.post("/analyze-meeting")
 def analyze(req: MeetingRequest):
     prompt = f"""
-    Analyze this meeting transcript and return JSON:
+    Analyze this meeting transcript and return ONLY valid JSON.
+
+    Do NOT add any explanation or text.
 
     {{
-      "summary": "...",
+      "summary": "string",
       "action_items": [],
       "decisions": []
     }}
@@ -33,7 +35,15 @@ def analyze(req: MeetingRequest):
 
     response = model.generate_content(prompt)
 
+    output = response.text.strip()
+
     try:
-        return json.loads(response.text)
-    except:
-        return {"error": response.text}
+        start = output.find("{")
+        end = output.rfind("}") + 1
+        json_str = output[start:end]
+        return json.loads(json_str)
+    except Exception as e:
+        return {
+            "error": "Failed to parse JSON",
+            "raw_output": output
+        }
