@@ -8,7 +8,7 @@
 </head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center p-6">
     <div class="max-w-2xl w-full bg-white rounded-xl shadow-lg p-8">
-        <h1 class="text-3xl font-bold text-gray-800 mb-2">MIA 🚀</h1>
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">MIA - Meeting Intelligent Assistant</h1>
         <p class="text-gray-500 mb-6">Upload a file or paste your meeting transcript below.</p>
 
         <form id="analyzeForm" class="space-y-4">
@@ -39,31 +39,40 @@
     </div>
 
     <script>
-        const form = document.getElementById('analyzeForm');
-        form.onsubmit = async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('submitBtn');
-            btn.innerText = "Analyzing...";
-            btn.disabled = true;
+    const form = document.getElementById('analyzeForm');
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('submitBtn');
 
-            const formData = new FormData(form);
-            const response = await fetch('/analyze', { method: 'POST', body: formData });
-            const data = await response.json();
+        // Clear old results
+        const resultsDiv = document.getElementById('results');
+        const summaryDiv = document.getElementById('summary');
+        const itemsDiv = document.getElementById('items');
+        summaryDiv.innerText = '';
+        itemsDiv.innerHTML = '';
+        resultsDiv.classList.add('hidden');
 
-            btn.innerText = "Analyze Meeting";
-            btn.disabled = false;
+        btn.innerText = "Analyzing...";
+        btn.disabled = true;
 
-            if (response.ok) {
-                document.getElementById('results').classList.remove('hidden');
-                document.getElementById('summary').innerText = data.summary;
-                document.getElementById('items').innerHTML = `
-                    <p><strong>Action Items:</strong> ${data.action_items.join(', ')}</p>
-                    <p><strong>Decisions:</strong> ${data.decisions.join(', ')}</p>
-                `;
-            } else {
-                alert("Error: " + data.detail);
-            }
-        };
-    </script>
+        const formData = new FormData(form);
+        const response = await fetch('/analyze', { method: 'POST', body: formData });
+        const data = await response.json();
+
+        btn.innerText = "Analyze Meeting";
+        btn.disabled = false;
+
+        if (response.ok) {
+            resultsDiv.classList.remove('hidden');
+            summaryDiv.innerText = data.summary;
+            itemsDiv.innerHTML = `
+                <p><strong>Action Items:</strong> ${data.action_items.join(', ')}</p>
+                <p><strong>Decisions:</strong> ${data.decisions.join(', ')}</p>
+            `;
+        } else {
+            alert("Error: " + data.detail);
+        }
+    };
+</script>
 </body>
 </html>
