@@ -10,7 +10,12 @@ app = FastAPI(title="MIA - Meeting Intelligent Assistant")
 
 # 1. Initialize the new GenAI Client
 # It automatically looks for the GEMINI_API_KEY environment variable.
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+api_key = os.getenv("GEMINI_API_KEY")
+
+if not api_key:
+    raise Exception("GEMINI_API_KEY not set")
+
+client = genai.Client(api_key=api_key)
 
 @app.get("/", response_class=HTMLResponse)
 async def get_ui():
@@ -39,13 +44,13 @@ async def analyze_meeting(
     # 2. Call Gemini using the new SDK structure
     try:
         response = client.models.generate_content(
-        model="gemini-1.5-flash",
-        contents=f"Summarize this meeting transcript into JSON (summary, action_items, decisions): {content}",
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            temperature=1.0
+            model="gemini-1.5-flash",
+            contents=f"Summarize this meeting transcript into JSON (summary, action_items, decisions): {content}",
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                temperature=1.0  # Standard for Gemini 3 series
+            )
         )
-    )
         
         # In the new SDK, access text directly via response.text
         return json.loads(response.text)
