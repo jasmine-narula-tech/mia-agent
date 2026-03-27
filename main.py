@@ -1,46 +1,46 @@
 import os
-import json
-import asyncio
-from typing import Optional, List
+import pydantic
+from typing import Optional, List, Dict
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-import google.generativeai as genai
+from fastapi.responses import JSONResponse
+from google import genai
+from google.genai import types
 
 app = FastAPI(title="MIA - Meeting Intelligence Agent")
 
-# API Key
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    raise Exception("GEMINI_API_KEY not set")
+# 1. New SDK Client Setup (Asynchronous)
+# Note: It automatically picks up GEMINI_API_KEY from environment
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY")).aio
 
-genai.configure(api_key=api_key)
+# 2. Define your output structure using Pydantic
+class ActionItem(pydantic.BaseModel):
+    task: str
+    assigned_to: str
+    deadline: str
 
-model = genai.GenerativeModel(
-    model_name="models/gemini-1.5-flash",
-    generation_config={
-        "temperature": 0.2
-    }
-)
+class MeetingAnalysis(pydantic.BaseModel):
+    summary: str
+    tone: str
+    productivity_score: int
+    engagement: Dict[str, str]
+    blockers: List[str]
+    action_items: List[ActionItem]
+    decisions: List[str]
 
-# Split text
-def chunk_text(text: str, chunk_size: int = 3000) -> List[str]:
+# Model ID for 2026
+MODEL_ID = "gemini-3-flash-preview"
+
+def chunk_text(text: str, chunk_size: int = 8000) -> List[str]:
+    # Gemini 3 has a huge context, but chunking is still good for parallel speed
     return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
-
-# Run blocking AI call in thread (IMPORTANT)
-async def summarize_chunk(chunk: str) -> str:
-    def call_model():
-        prompt = f"Summarize this meeting transcript in 2-3 sentences:\n{chunk}"
-        response = model.generate_content(prompt)
-        return response.text
-
-    return await asyncio.to_thread(call_model)
 
 @app.post("/analyze")
 async def analyze_meeting(
     transcript_text: Optional[str] = Form(None),
     transcript_file: Optional[UploadFile] = File(None)
 ):
+    # 1. Get Content
     content = ""
-
     if transcript_file and transcript_file.filename:
         file_bytes = await transcript_file.read()
         content = file_bytes.decode("utf-8")
@@ -50,40 +50,37 @@ async def analyze_meeting(
     if not content.strip():
         raise HTTPException(status_code=400, detail="No transcript provided")
 
-    # 1. Chunking
-    chunks = chunk_text(content)
-
-    # 2. Parallel summaries (SAFE now)
-    summaries = await asyncio.gather(*[summarize_chunk(c) for c in chunks])
-    combined_summary = "\n".join(summaries)
-
-    # 3. Final structured output
-    def final_call():
-        prompt = f"""
-        Analyze this meeting and return ONLY valid JSON.
-
-        Transcript summary:
-        {combined_summary}
-
-        JSON:
-        {{
-            "summary": "string",
-            "tone": "Positive / Neutral / Negative",
-            "productivity_score": 1-10,
-            "engagement": {{"speaker": "percent"}},
-            "blockers": ["string"],
-            "action_items": [
-                {{"task": "string", "assigned_to": "string", "deadline": "string"}}
-            ],
-            "decisions": ["string"]
-        }}
-        """
-        response = model.generate_content(prompt)
-        return response.text
-
     try:
-        result_text = await asyncio.to_thread(final_call)
-        return json.loads(result_text)
+        # 2. Parallel Chunk Summarization (Using the new .aio client)
+        chunks = chunk_text(content)
+        
+        # We define a helper task for the parallel calls
+        async def get_summary(c):
+            res = await client.models.generate_content(
+                model=MODEL_ID,
+                contents=f"Summarize this meeting segment briefly: {c}"
+            )
+            return res.text
+
+        chunk_summaries = await asyncio.gather(*[get_summary(c) for c in chunks])
+        combined_context = "\n".join(chunk_summaries)
+
+        # 3. Final Structured Analysis
+        # The new SDK handles the JSON schema generation and parsing for you!
+        response = await client.models.generate_content(
+            model=MODEL_ID,
+            contents=f"Perform a deep analysis of this meeting summary: {combined_context}",
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=MeetingAnalysis, # Directly pass the Pydantic class
+                temperature=0.7
+            )
+        )
+
+        # 4. Return the parsed object directly
+        return response.parsed
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"AI Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"MIA Agent Error: {str(e)}")
+
+# Run with: python3 -m uvicorn main:app --reload --port 8080
