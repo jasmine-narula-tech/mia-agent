@@ -9,19 +9,25 @@ from fastapi.responses import HTMLResponse
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from google.genai import types  # Required for message formatting
+from google.adk.apps import App  # <--- Added this to fix "Session not found"
+from google.genai import types
 
-app = FastAPI(title="MIA - Final Fix")
+app = FastAPI(title="MIA - Zero Error Edition")
 
 # 1. Global Session Service
 session_service = InMemorySessionService()
 
-# 2. Agent Definition
+# 2. Define the Agent
 mia_agent = Agent(
     name="MIA_Meeting_Agent",
     model="gemini-2.0-flash", 
     instruction="Analyze meeting transcripts. Extract action items, decisions, and blockers. Return strict JSON."
 )
+
+# 3. Wrap in an App (This prevents the 'Session Not Found' mismatch)
+# The App name MUST match the name used in your session creation
+MIA_APP_NAME = "MIA_Manager"
+mia_app = App(name=MIA_APP_NAME, root_agent=mia_agent)
 
 @app.get("/", response_class=HTMLResponse)
 async def get_ui():
@@ -44,22 +50,27 @@ async def analyze_meeting(
         raise HTTPException(status_code=400, detail="Transcript is empty.")
 
     try:
-        # ✅ FIX 1: Runner initialization (Only Agent and Service)
+        # ✅ STEP 1: Create the session and WAIT for it
+        # This ensures the ID exists in the service before the runner looks for it
+        await session_service.create_session(
+            app_name=MIA_APP_NAME, 
+            user_id="default_user", 
+            session_id=session_id
+        )
+
+        # ✅ STEP 2: Initialize Runner with the APP object
         runner = Runner(
-            app_name="MIA_App",
-            agent=mia_agent, 
+            app=mia_app,  # Using 'app' instead of 'agent' fixes the lookup error
             session_service=session_service
         )
 
-        # ✅ FIX 2: Correct message formatting
-        # Many 2026 versions require the input as a Content object
+        # ✅ STEP 3: Format the message correctly
         user_message = types.Content(
             role="user",
-            parts=[types.Part(text=f"Analyze this meeting: {content}")]
+            parts=[types.Part(text=f"Analyze this transcript and return JSON: {content}")]
         )
 
-        # ✅ FIX 3: run_async with keyword arguments
-        # This is the most stable interface for passing session info
+        # ✅ STEP 4: Run and collect response
         final_text = ""
         async for event in runner.run_async(
             user_id="default_user",
@@ -67,10 +78,9 @@ async def analyze_meeting(
             new_message=user_message
         ):
             if event.is_final_response():
-                # Extracting the text from the final event
                 final_text = event.content.parts[0].text
 
-        # Clean JSON and Return
+        # Standard JSON cleaning
         raw_text = final_text.strip()
         if "```json" in raw_text:
             raw_text = raw_text.split("```json")[1].split("```")[0].strip()
@@ -80,8 +90,8 @@ async def analyze_meeting(
         return json.loads(raw_text)
         
     except Exception as e:
-        print(f"ADK Final Debug: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"ADK Debug: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Runner Error: {str(e)}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
