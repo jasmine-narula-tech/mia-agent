@@ -3,27 +3,50 @@ import json
 from typing import Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
-import google.generativeai as genai
+
+# ADK import
+from google.adk.agents import Agent
 
 app = FastAPI(title="MIA - Meeting Intelligent Assistant")
 
-# ✅ API Key
+# API Key check
 api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
     raise Exception("GEMINI_API_KEY not set")
 
-genai.configure(api_key=api_key)
+# Create ADK Agent
+agent = Agent(
+    model="gemini-1.5-flash-latest",   # stable + fast
+    description="Meeting Intelligence Agent",
+    instruction="""
+    You are an AI meeting assistant.
+    Analyze meeting transcripts and return ONLY valid JSON in this format:
 
-# ✅ Use your WORKING model
-model = genai.GenerativeModel(
-    model_name="models/gemini-2.5-flash-lite",
-    generation_config={
-        "response_mime_type": "application/json",
-        "temperature": 0.2
+    {
+      "summary": "string",
+      "tone": "Positive / Neutral / Negative",
+      "productivity_score": 1-10,
+      "engagement": {"speaker_name": "percent"},
+      "blockers": ["string"],
+      "action_items": [
+        {
+          "task": "string",
+          "assigned_to": "string",
+          "deadline": "string or null"
+        }
+      ],
+      "decisions": ["string"]
     }
+
+    Do NOT add explanations. Return ONLY JSON.
+    """
 )
 
-# ✅ UI route
+# Helper: clean markdown JSON
+def clean_json(text: str):
+    return text.replace("```json", "").replace("```", "").strip()
+
+# UI route
 @app.get("/", response_class=HTMLResponse)
 async def get_ui():
     try:
@@ -32,7 +55,7 @@ async def get_ui():
     except FileNotFoundError:
         return "<h1>index.html not found</h1>"
 
-# ✅ Analyze endpoint (TEXT + FILE)
+# Analyze endpoint
 @app.post("/analyze")
 async def analyze_meeting(
     transcript_text: Optional[str] = Form(None),
@@ -40,48 +63,37 @@ async def analyze_meeting(
 ):
     content = ""
 
+    # Read input
     if transcript_file and transcript_file.filename:
+        if not transcript_file.filename.endswith(".txt"):
+            raise HTTPException(status_code=400, detail="Only .txt files supported")
         file_bytes = await transcript_file.read()
         content = file_bytes.decode("utf-8")
+
     elif transcript_text:
         content = transcript_text
 
     if not content.strip():
         raise HTTPException(status_code=400, detail="No transcript provided")
 
-    
+    # Limit size (fast response)
     content = content[:5000]
-    prompt = f"""
-    Analyze this meeting transcript and return ONLY valid JSON in the specified schema.
 
+    prompt = f"""
     Transcript:
     {content}
-
-    JSON schema:
-    {{
-    "summary": "string",
-    "tone": "Positive / Neutral / Negative",
-    "productivity_score": 1-10,
-    "engagement": {{"speaker_name": "percent of speaking time"}},
-    "blockers": ["string"],
-    "action_items": [
-        {{
-        "task": "string",
-        "assigned_to": "string",
-        "deadline": "string or null"
-        }}
-    ],
-    "decisions": ["string"]
-    }}
     """
 
     try:
-        response = model.generate_content(prompt)
+        # ✅ ADK Agent call
+        response = agent.run(prompt)
 
-        if not response.text:
+        if not response:
             raise HTTPException(status_code=500, detail="No response from AI")
 
-        return json.loads(response.text)
+        cleaned = clean_json(response)
+
+        return json.loads(cleaned)
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI Error: {str(e)}")
