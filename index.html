@@ -10,7 +10,6 @@
         .spinner { border: 3px solid rgba(0, 0, 0, 0.1); border-left-color: #3b82f6; border-radius: 50%; width: 20px; height: 20px; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .tab-active { color: #2563eb; border-bottom: 2px solid #2563eb; }
-        .tab-inactive { color: #94a3b8; border-bottom: 2px solid transparent; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen text-slate-900 pb-20">
@@ -19,10 +18,10 @@
         <div class="max-w-5xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-2">
                 <div class="bg-blue-600 p-2 rounded-lg text-white"><i data-lucide="bot"></i></div>
-                <h1 class="text-xl font-bold tracking-tight">MIA <span class="text-blue-600">AI</span></h1>
+                <h1 class="text-xl font-bold">MIA <span class="text-blue-600">AI</span></h1>
             </div>
-            <button onclick="resetApp()" class="text-xs font-bold text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1">
-                <i data-lucide="refresh-ccw" class="w-3 h-3"></i> RESET SYSTEM
+            <button onclick="resetApp()" class="text-slate-500 hover:text-red-500 flex items-center gap-1 text-sm font-medium transition">
+                <i data-lucide="refresh-ccw" class="w-4 h-4"></i> Reset
             </button>
         </div>
     </nav>
@@ -31,49 +30,69 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             
             <div class="lg:col-span-1 space-y-6">
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <div class="bg-white rounded-2xl shadow-sm border p-6">
                     <form id="analyzeForm" class="space-y-4">
                         <textarea id="transcriptText" name="transcript_text" rows="8" 
-                            class="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                            class="w-full p-4 bg-slate-50 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                             placeholder="Paste transcript here..."></textarea>
 
-                        <div class="relative flex justify-center text-xs uppercase"><span class="bg-white px-2 text-slate-400">or upload</span></div>
+                        <div class="relative flex justify-center text-xs uppercase"><span class="bg-white px-2 text-slate-400">or</span></div>
 
-                        <label class="flex flex-col items-center justify-center w-full p-4 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-slate-100 transition">
-                            <div id="fileUploadInfo" class="text-center">
-                                <i data-lucide="upload-cloud" class="w-8 h-8 mx-auto mb-2 text-slate-400"></i>
-                                <p id="fileNameDisplay" class="text-xs text-slate-500">Click to upload file</p>
+                        <label id="dropzone" class="flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-blue-50 hover:border-blue-400 transition">
+                            <div class="flex flex-col items-center justify-center py-4 text-slate-500" id="fileInfo">
+                                <i data-lucide="file-up" class="w-8 h-8 mb-2"></i>
+                                <p class="text-xs font-medium">Click to upload file</p>
                             </div>
                             <input type="file" id="transcriptFile" name="transcript_file" class="hidden" onchange="handleFileSelect(this)" />
                         </label>
 
                         <button type="submit" id="submitBtn" class="w-full bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition flex items-center justify-center gap-2">
-                            <span>Analyze Now</span>
+                            <span>Analyze</span>
                         </button>
                     </form>
                 </div>
             </div>
 
             <div class="lg:col-span-2">
-                <div id="emptyState" class="bg-white rounded-2xl border border-dashed border-slate-300 p-20 text-center">
-                    <i data-lucide="file-search" class="w-12 h-12 text-slate-300 mx-auto mb-4"></i>
-                    <p class="text-slate-500">Analysis results will appear here</p>
+                <div id="emptyState" class="bg-white rounded-2xl border border-dashed p-20 text-center">
+                    <i data-lucide="layers" class="w-12 h-12 text-slate-200 mx-auto mb-4"></i>
+                    <p class="text-slate-400">Your analysis will appear here</p>
                 </div>
 
                 <div id="results" class="hidden space-y-6">
-                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                        <h2 class="text-xl font-bold mb-4 flex items-center gap-2"><i data-lucide="sparkles" class="text-yellow-500"></i> Summary</h2>
-                        <p id="summary" class="text-slate-600 leading-relaxed"></p>
+                    <div class="bg-white rounded-2xl shadow-sm border p-6">
+                        <h2 class="text-lg font-bold mb-3 flex items-center gap-2"><i data-lucide="text-quote" class="text-blue-500"></i> Summary</h2>
+                        <p id="summary" class="text-slate-600 text-sm leading-relaxed"></p>
                     </div>
 
-                    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div class="flex border-b">
-                            <button id="tabAction" onclick="switchTab('action')" class="flex-1 p-4 font-bold tab-active">Action Items</button>
-                            <button id="tabDecision" onclick="switchTab('decision')" class="flex-1 p-4 font-bold tab-inactive">Decisions</button>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="bg-white p-4 rounded-2xl border text-center">
+                            <p class="text-[10px] uppercase font-bold text-slate-400">Tone</p>
+                            <p id="tone" class="font-bold text-blue-600"></p>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border text-center">
+                            <p class="text-[10px] uppercase font-bold text-slate-400">Productivity</p>
+                            <p id="productivity" class="font-bold text-slate-800"></p>
+                        </div>
+                        <div class="bg-white p-4 rounded-2xl border text-center">
+                            <p class="text-[10px] uppercase font-bold text-slate-400">Engagement</p>
+                            <div id="engagement" class="text-[10px] font-medium text-slate-500 mt-1"></div>
+                        </div>
+                    </div>
+
+                    <div id="blockersBox" class="bg-red-50 border border-red-100 rounded-2xl p-5 hidden">
+                        <h3 class="text-red-800 font-bold text-sm mb-2 flex items-center gap-2"><i data-lucide="alert-circle" class="w-4 h-4"></i> Critical Blockers</h3>
+                        <ul id="blockersList" class="text-red-700 text-xs list-disc pl-5 space-y-1"></ul>
+                    </div>
+
+                    <div class="bg-white rounded-2xl shadow-sm border overflow-hidden">
+                        <div class="flex border-b bg-slate-50">
+                            <button onclick="switchTab('items')" id="btn-items" class="flex-1 p-4 text-sm font-bold tab-active">Action Items</button>
+                            <button onclick="switchTab('decisions')" id="btn-decisions" class="flex-1 p-4 text-sm font-bold text-slate-400">Decisions</button>
                         </div>
                         <div class="p-6">
-                            <div id="actionContent" class="space-y-4"></div>
-                            <div id="decisionContent" class="hidden space-y-4"></div>
+                            <div id="tab-items" class="space-y-3"></div>
+                            <div id="tab-decisions" class="hidden space-y-2"></div>
                         </div>
                     </div>
                 </div>
@@ -83,87 +102,88 @@
 
     <script>
     lucide.createIcons();
-    
-    // 1. Clear/Reset functionality
-    function resetApp() {
-        if(confirm("Clear current transcript and analysis?")) {
-            document.getElementById('analyzeForm').reset();
-            document.getElementById('fileNameDisplay').innerText = "Click to upload file";
-            document.getElementById('results').classList.add('hidden');
-            document.getElementById('emptyState').classList.remove('hidden');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-    }
 
-    // 2. File Upload Feedback
     function handleFileSelect(input) {
-        const fileName = input.files[0]?.name || "Click to upload file";
-        const display = document.getElementById('fileNameDisplay');
-        display.innerText = fileName;
-        display.classList.add('text-blue-600', 'font-bold');
-    }
-
-    // 3. Tab Logic Fix
-    function switchTab(type) {
-        const actionBtn = document.getElementById('tabAction');
-        const decisionBtn = document.getElementById('tabDecision');
-        const actionBody = document.getElementById('actionContent');
-        const decisionBody = document.getElementById('decisionContent');
-
-        if(type === 'action') {
-            actionBtn.className = 'flex-1 p-4 font-bold tab-active';
-            decisionBtn.className = 'flex-1 p-4 font-bold tab-inactive';
-            actionBody.classList.remove('hidden');
-            decisionBody.classList.add('hidden');
-        } else {
-            decisionBtn.className = 'flex-1 p-4 font-bold tab-active';
-            actionBtn.className = 'flex-1 p-4 font-bold tab-inactive';
-            decisionBody.classList.remove('hidden');
-            actionBody.classList.add('hidden');
+        const info = document.getElementById('fileInfo');
+        const dropzone = document.getElementById('dropzone');
+        if (input.files.length > 0) {
+            const fileName = input.files[0].name;
+            info.innerHTML = `<i data-lucide="check-circle" class="w-8 h-8 mb-2 text-green-500"></i><p class="text-xs font-bold text-green-700">${fileName}</p>`;
+            dropzone.classList.add('border-green-400', 'bg-green-50');
         }
+        lucide.createIcons();
     }
 
-    const form = document.getElementById('analyzeForm');
-    form.onsubmit = async (e) => {
+    function resetApp() {
+        document.getElementById('analyzeForm').reset();
+        document.getElementById('fileInfo').innerHTML = `<i data-lucide="file-up" class="w-8 h-8 mb-2"></i><p class="text-xs font-medium">Click to upload file</p>`;
+        document.getElementById('dropzone').className = "flex flex-col items-center justify-center w-full h-32 border-2 border-slate-300 border-dashed rounded-xl cursor-pointer bg-slate-50 hover:bg-blue-50 hover:border-blue-400 transition";
+        document.getElementById('results').classList.add('hidden');
+        document.getElementById('emptyState').classList.remove('hidden');
+        lucide.createIcons();
+    }
+
+    function switchTab(type) {
+        const isItems = type === 'items';
+        document.getElementById('tab-items').classList.toggle('hidden', !isItems);
+        document.getElementById('tab-decisions').classList.toggle('hidden', isItems);
+        document.getElementById('btn-items').className = isItems ? 'flex-1 p-4 text-sm font-bold tab-active' : 'flex-1 p-4 text-sm font-bold text-slate-400';
+        document.getElementById('btn-decisions').className = !isItems ? 'flex-1 p-4 text-sm font-bold tab-active' : 'flex-1 p-4 text-sm font-bold text-slate-400';
+    }
+
+    document.getElementById('analyzeForm').onsubmit = async (e) => {
         e.preventDefault();
         const btn = document.getElementById('submitBtn');
-        btn.innerHTML = `<div class="spinner"></div><span>Analyzing...</span>`;
+        btn.innerHTML = `<div class="spinner mr-2"></div><span>Analyzing...</span>`;
         btn.disabled = true;
 
-        const formData = new FormData(form);
+        const formData = new FormData(e.target);
         try {
             const response = await fetch('/analyze', { method: 'POST', body: formData });
             const data = await response.json();
-
-            if (response.ok) {
-                document.getElementById('emptyState').classList.add('hidden');
-                document.getElementById('results').classList.remove('hidden');
-                document.getElementById('summary').innerText = data.summary;
-
-                // Action Items
-                document.getElementById('actionContent').innerHTML = data.action_items.map(i => `
-                    <div class="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                        <p class="font-bold text-slate-800">${i.task}</p>
-                        <p class="text-xs text-slate-500 italic mt-1">${i.assigned_to} • ${i.deadline || 'No deadline'}</p>
-                    </div>
-                `).join('');
-
-                // Decisions
-                document.getElementById('decisionContent').innerHTML = data.decisions.map(d => `
-                    <div class="flex items-center gap-3 p-3 bg-purple-50 rounded-lg text-purple-700 font-medium border border-purple-100">
-                        <i data-lucide="award" class="w-4 h-4"></i> ${d}
-                    </div>
-                `).join('') || "<p class='text-slate-400'>No major decisions recorded.</p>";
-
-                lucide.createIcons();
-                switchTab('action'); // Reset to first tab
-            }
+            if (response.ok) render(data);
+            else alert(data.detail);
         } catch (err) { alert(err.message); }
-        finally {
-            btn.innerHTML = `<span>Analyze Now</span>`;
-            btn.disabled = false;
-        }
+        finally { btn.innerHTML = `<span>Analyze</span>`; btn.disabled = false; }
     };
+
+    function render(data) {
+        document.getElementById('emptyState').classList.add('hidden');
+        document.getElementById('results').classList.remove('hidden');
+        
+        document.getElementById('summary').innerText = data.summary;
+        document.getElementById('tone').innerText = data.tone;
+        document.getElementById('productivity').innerText = `${data.productivity_score}/10`;
+        
+        // Engagement
+        document.getElementById('engagement').innerHTML = Object.entries(data.engagement)
+            .map(([name, val]) => `<div>${name}: ${val}</div>`).join('');
+
+        // Blockers
+        const bBox = document.getElementById('blockersBox');
+        if (data.blockers?.length) {
+            bBox.classList.remove('hidden');
+            document.getElementById('blockersList').innerHTML = data.blockers.map(b => `<li>${b}</li>`).join('');
+        } else bBox.classList.add('hidden');
+
+        // Action Items
+        document.getElementById('tab-items').innerHTML = data.action_items.map(a => `
+            <div class="p-3 bg-slate-50 rounded-lg border text-xs">
+                <div class="font-bold text-slate-800">${a.task}</div>
+                <div class="text-slate-500 mt-1 uppercase text-[10px]">Owner: ${a.assigned_to} | Due: ${a.deadline || 'N/A'}</div>
+            </div>
+        `).join('');
+
+        // Decisions
+        document.getElementById('tab-decisions').innerHTML = data.decisions.map(d => `
+            <div class="flex items-center gap-2 text-sm text-slate-700 p-2 bg-purple-50 rounded-lg border border-purple-100">
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-purple-500"></i> <span>${d}</span>
+            </div>
+        `).join('');
+
+        lucide.createIcons();
+        switchTab('items');
+    }
     </script>
 </body>
 </html>
