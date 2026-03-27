@@ -16,7 +16,7 @@ if not api_key:
 
 # Create ADK Agent
 agent = Agent(
-    model="gemini-1.5-flash-latest",   # stable + fast
+    model="gemini-1.5-flash-lite", 
     description="Meeting Intelligence Agent",
     instruction="""
     You are an AI meeting assistant.
