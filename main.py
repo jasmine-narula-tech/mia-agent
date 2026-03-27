@@ -1,46 +1,45 @@
 import os
-import pydantic
-from typing import Optional, List, Dict
+import json
+from typing import Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import JSONResponse
-from google import genai
-from google.genai import types
+from fastapi.responses import HTMLResponse
+import google.generativeai as genai
 
-app = FastAPI(title="MIA - Meeting Intelligence Agent")
+app = FastAPI(title="MIA - Meeting Intelligent Assistant")
 
-# 1. New SDK Client Setup (Asynchronous)
-# Note: It automatically picks up GEMINI_API_KEY from environment
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY")).aio
+# ✅ API Key
+api_key = os.getenv("GEMINI_API_KEY")
+if not api_key:
+    raise Exception("GEMINI_API_KEY not set")
 
-# 2. Define your output structure using Pydantic
-class ActionItem(pydantic.BaseModel):
-    task: str
-    assigned_to: str
-    deadline: str
+genai.configure(api_key=api_key)
 
-class MeetingAnalysis(pydantic.BaseModel):
-    summary: str
-    tone: str
-    productivity_score: int
-    engagement: Dict[str, str]
-    blockers: List[str]
-    action_items: List[ActionItem]
-    decisions: List[str]
+# ✅ Use your WORKING model
+model = genai.GenerativeModel(
+    model_name="models/gemini-3-flash-preview",
+    generation_config={
+        "response_mime_type": "application/json",
+        "temperature": 1.0
+    }
+)
 
-# Model ID for 2026
-MODEL_ID = "gemini-3-flash-preview"
+# ✅ UI route
+@app.get("/", response_class=HTMLResponse)
+async def get_ui():
+    try:
+        with open("index.html", "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        return "<h1>index.html not found</h1>"
 
-def chunk_text(text: str, chunk_size: int = 8000) -> List[str]:
-    # Gemini 3 has a huge context, but chunking is still good for parallel speed
-    return [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
-
+# ✅ Analyze endpoint (TEXT + FILE)
 @app.post("/analyze")
 async def analyze_meeting(
     transcript_text: Optional[str] = Form(None),
     transcript_file: Optional[UploadFile] = File(None)
 ):
-    # 1. Get Content
     content = ""
+
     if transcript_file and transcript_file.filename:
         file_bytes = await transcript_file.read()
         content = file_bytes.decode("utf-8")
@@ -50,37 +49,37 @@ async def analyze_meeting(
     if not content.strip():
         raise HTTPException(status_code=400, detail="No transcript provided")
 
+    prompt = f"""
+    Analyze this meeting transcript and return ONLY valid JSON in the specified schema.
+
+    Transcript:
+    {content}
+
+    JSON schema:
+    {{
+    "summary": "string",
+    "tone": "Positive / Neutral / Negative",
+    "productivity_score": 1-10,
+    "engagement": {{"speaker_name": "percent of speaking time"}},
+    "blockers": ["string"],
+    "action_items": [
+        {{
+        "task": "string",
+        "assigned_to": "string",
+        "deadline": "string or null"
+        }}
+    ],
+    "decisions": ["string"]
+    }}
+    """
+
     try:
-        # 2. Parallel Chunk Summarization (Using the new .aio client)
-        chunks = chunk_text(content)
-        
-        # We define a helper task for the parallel calls
-        async def get_summary(c):
-            res = await client.models.generate_content(
-                model=MODEL_ID,
-                contents=f"Summarize this meeting segment briefly: {c}"
-            )
-            return res.text
+        response = model.generate_content(prompt)
 
-        chunk_summaries = await asyncio.gather(*[get_summary(c) for c in chunks])
-        combined_context = "\n".join(chunk_summaries)
+        if not response.text:
+            raise HTTPException(status_code=500, detail="No response from AI")
 
-        # 3. Final Structured Analysis
-        # The new SDK handles the JSON schema generation and parsing for you!
-        response = await client.models.generate_content(
-            model=MODEL_ID,
-            contents=f"Perform a deep analysis of this meeting summary: {combined_context}",
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json",
-                response_schema=MeetingAnalysis, # Directly pass the Pydantic class
-                temperature=0.7
-            )
-        )
-
-        # 4. Return the parsed object directly
-        return response.parsed
+        return json.loads(response.text)
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"MIA Agent Error: {str(e)}")
-
-# Run with: python3 -m uvicorn main:app --reload --port 8080
+        raise HTTPException(status_code=500, detail=f"AI Error: {str(e)}")
