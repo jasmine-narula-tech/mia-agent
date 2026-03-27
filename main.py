@@ -16,10 +16,10 @@ genai.configure(api_key=api_key)
 
 # ✅ Use your WORKING model
 model = genai.GenerativeModel(
-    model_name="models/gemini-3-flash-preview",
+    model_name="models/gemini-1.5-flash",
     generation_config={
         "response_mime_type": "application/json",
-        "temperature": 1.0
+        "temperature": 0.2
     }
 )
 
@@ -49,6 +49,8 @@ async def analyze_meeting(
     if not content.strip():
         raise HTTPException(status_code=400, detail="No transcript provided")
 
+    
+    content = content[:5000]
     prompt = f"""
     Analyze this meeting transcript and return ONLY valid JSON in the specified schema.
 
