@@ -1,8 +1,10 @@
 import os
 import json
+import uvicorn
 from typing import Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
+
 
 # ADK import
 from google.adk.agents import Agent
@@ -97,3 +99,8 @@ async def analyze_meeting(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI Error: {str(e)}")
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)
