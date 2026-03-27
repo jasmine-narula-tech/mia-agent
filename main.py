@@ -48,12 +48,14 @@ async def analyze_meeting(
         raise HTTPException(status_code=400, detail="No transcript provided.")
 
     try:
-        # ✅ THE FINAL ADK FIX: 
-        # You must provide BOTH app_name and agent when initializing the Runner
+        # ✅ THE POSITIONING FIX:
+        # We define the session context INSIDE the Runner initialization
         runner = Runner(
             app_name="MIA_Meeting_Assistant",
             agent=mia_agent, 
-            session_service=session_service
+            session_service=session_service,
+            session_id=session_id,  # Move session_id here
+            user_id="default_user"  # Move user_id here
         )
         
         # Ensure session existence
@@ -63,15 +65,13 @@ async def analyze_meeting(
             session_id=session_id
         )
 
-        # Execute the loop
-        # Pass content as a positional argument (no 'user_input=' keyword)
+        # ✅ THE CALL FIX:
+        # Now runner.run() only takes ONE positional argument (the prompt)
         result = await runner.run(
-            f"Extract the following meeting data in valid JSON: {content}",
-            session_id=session_id,
-            user_id="default_user"
+            f"Analyze this meeting and return valid JSON: {content}"
         )
         
-        # Robust JSON cleaning
+        # Clean the JSON output
         raw_text = result.text.strip()
         if "```json" in raw_text:
             raw_text = raw_text.split("```json")[1].split("```")[0].strip()
@@ -81,7 +81,7 @@ async def analyze_meeting(
         return json.loads(raw_text)
         
     except Exception as e:
-        print(f"ADK Final Error Trace: {str(e)}")
+        print(f"ADK Final Trace: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
