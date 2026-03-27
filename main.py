@@ -39,7 +39,8 @@ async def analyze_meeting(
 ):
     content = ""
     if transcript_file and transcript_file.filename:
-        content = (await transcript_file.read()).decode("utf-8")
+        file_bytes = await transcript_file.read()
+        content = file_bytes.decode("utf-8")
     elif transcript_text:
         content = transcript_text
 
@@ -47,35 +48,46 @@ async def analyze_meeting(
         raise HTTPException(status_code=400, detail="No transcript provided.")
 
     try:
-        # ✅ THE FIX: Pass the session_service to the Runner
+        # 1. Initialize Runner with the Agent and Service
         runner = Runner(
             agent=mia_agent, 
-            session_service=session_service,  # <--- THIS WAS MISSING
-            app_name="MIA_App"
+            session_service=session_service
         )
         
-        # In the latest ADK, we first ensure the session exists
+        # 2. Ensure the session is initialized in the service
+        # This is required for the Runner to track the conversation
         await session_service.create_session(
             app_name="MIA_App", 
             user_id="default_user", 
             session_id=session_id
         )
 
-        # Run the agentic loop
+        # ✅ THE FIX: Pass content as the first positional argument
+        # In the latest ADK, 'user_input' keyword is replaced by a direct string
         result = await runner.run(
-            user_input=f"Analyze this: {content}",
+            f"Analyze this meeting transcript and return the JSON: {content}",
             session_id=session_id,
             user_id="default_user"
         )
         
-        # Clean the response (removing potential markdown backticks)
-        raw_text = result.text.strip().replace("```json", "").replace("```", "").strip()
+        # 3. Handle the JSON extraction
+        raw_text = result.text.strip()
+        # Remove markdown if the model wrapped it
+        if "```json" in raw_text:
+            raw_text = raw_text.split("```json")[1].split("```")[0].strip()
+        elif "```" in raw_text:
+            raw_text = raw_text.split("```")[1].strip()
+
         return json.loads(raw_text)
         
+    except json.JSONDecodeError as je:
+        print(f"JSON Error: {result.text}")
+        raise HTTPException(status_code=500, detail="Agent failed to produce valid JSON.")
     except Exception as e:
         print(f"ADK Runner Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+        
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
