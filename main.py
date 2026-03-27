@@ -32,26 +32,30 @@ async def analyze_meeting(
     transcript_file: Optional[UploadFile] = File(None),
     session_id: str = Form("default_session")
 ):
-    # 1. Get the content
-    content = transcript_text or ""
-    if transcript_file:
-        content = (await transcript_file.read()).decode("utf-8")
+    content = ""
 
-    if not content:
+    # 1. Check if a file was uploaded
+    if transcript_file and transcript_file.filename:
+        file_bytes = await transcript_file.read()
+        content = file_bytes.decode("utf-8")
+    
+    # 2. If no file, check the text area
+    elif transcript_text and transcript_text.strip():
+        content = transcript_text
+
+    # 3. Final validation
+    if not content.strip():
+        # This is where your 400 error is coming from
         raise HTTPException(status_code=400, detail="No transcript provided.")
 
     try:
-        # 2. Use ADK to run the agent
-        # ADK handles the prompt construction and model interaction
+        # ADK Run
         result = await mia_agent.run(content, session_id=session_id)
-        
-        # 3. Return the response text (ADK agents return a Response object)
         return json.loads(result.text)
         
     except Exception as e:
-        print(f"ADK Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
+        
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
