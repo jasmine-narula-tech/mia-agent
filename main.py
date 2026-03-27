@@ -5,12 +5,13 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
 
-# 2026 Standard ADK Imports
+# Stable 2026 ADK Imports
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
+from google.genai import types  # Required for message formatting
 
-app = FastAPI(title="MIA - Final ADK Stable")
+app = FastAPI(title="MIA - Final Fix")
 
 # 1. Global Session Service
 session_service = InMemorySessionService()
@@ -19,7 +20,7 @@ session_service = InMemorySessionService()
 mia_agent = Agent(
     name="MIA_Meeting_Agent",
     model="gemini-2.0-flash", 
-    instruction="Extract action items, decisions, and blockers from meetings. Return valid JSON."
+    instruction="Analyze meeting transcripts. Extract action items, decisions, and blockers. Return strict JSON."
 )
 
 @app.get("/", response_class=HTMLResponse)
@@ -33,7 +34,6 @@ async def analyze_meeting(
     transcript_file: Optional[UploadFile] = File(None),
     session_id: str = Form("default_session")
 ):
-    # Data Extraction
     content = ""
     if transcript_file and transcript_file.filename:
         content = (await transcript_file.read()).decode("utf-8")
@@ -44,31 +44,34 @@ async def analyze_meeting(
         raise HTTPException(status_code=400, detail="Transcript is empty.")
 
     try:
-        # ✅ THE CRITICAL FIX:
-        # In ADK 1.2+, the Runner 'owns' the session. 
-        # All IDs must be passed here, NOT in the .run() method.
+        # ✅ FIX 1: Runner initialization (Only Agent and Service)
         runner = Runner(
             app_name="MIA_App",
             agent=mia_agent, 
-            session_service=session_service,
-            session_id=session_id,  # Moved from .run()
-            user_id="default_user"  # Moved from .run()
-        )
-        
-        # Ensure session exists in memory
-        await session_service.create_session(
-            app_name="MIA_App", 
-            user_id="default_user", 
-            session_id=session_id
+            session_service=session_service
         )
 
-        # ✅ THE CALL FIX:
-        # .run() now takes exactly ONE positional argument: your prompt.
-        prompt = f"Return a JSON analysis of this transcript: {content}"
-        result = await runner.run(prompt)
-        
-        # Extract and Clean JSON
-        raw_text = result.text.strip()
+        # ✅ FIX 2: Correct message formatting
+        # Many 2026 versions require the input as a Content object
+        user_message = types.Content(
+            role="user",
+            parts=[types.Part(text=f"Analyze this meeting: {content}")]
+        )
+
+        # ✅ FIX 3: run_async with keyword arguments
+        # This is the most stable interface for passing session info
+        final_text = ""
+        async for event in runner.run_async(
+            user_id="default_user",
+            session_id=session_id,
+            new_message=user_message
+        ):
+            if event.is_final_response():
+                # Extracting the text from the final event
+                final_text = event.content.parts[0].text
+
+        # Clean JSON and Return
+        raw_text = final_text.strip()
         if "```json" in raw_text:
             raw_text = raw_text.split("```json")[1].split("```")[0].strip()
         elif "```" in raw_text:
@@ -77,8 +80,8 @@ async def analyze_meeting(
         return json.loads(raw_text)
         
     except Exception as e:
-        print(f"Final Debug Trace: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"ADK Runner Error: {str(e)}")
+        print(f"ADK Final Debug: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
