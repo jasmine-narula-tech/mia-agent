@@ -16,7 +16,7 @@ genai.configure(api_key=api_key)
 
 # ✅ Use your WORKING model
 model = genai.GenerativeModel(
-    model_name="models/gemini-1.5-flash",
+    model_name="models/gemini-2.5-flash-lite",
     generation_config={
         "response_mime_type": "application/json",
         "temperature": 0.2
