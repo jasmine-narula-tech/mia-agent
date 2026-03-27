@@ -48,31 +48,31 @@ async def analyze_meeting(
         raise HTTPException(status_code=400, detail="No transcript provided.")
 
     try:
-        # 1. Initialize Runner with the Agent and Service
+        # ✅ THE FINAL ADK FIX: 
+        # You must provide BOTH app_name and agent when initializing the Runner
         runner = Runner(
+            app_name="MIA_Meeting_Assistant",
             agent=mia_agent, 
             session_service=session_service
         )
         
-        # 2. Ensure the session is initialized in the service
-        # This is required for the Runner to track the conversation
+        # Ensure session existence
         await session_service.create_session(
-            app_name="MIA_App", 
+            app_name="MIA_Meeting_Assistant", 
             user_id="default_user", 
             session_id=session_id
         )
 
-        # ✅ THE FIX: Pass content as the first positional argument
-        # In the latest ADK, 'user_input' keyword is replaced by a direct string
+        # Execute the loop
+        # Pass content as a positional argument (no 'user_input=' keyword)
         result = await runner.run(
-            f"Analyze this meeting transcript and return the JSON: {content}",
+            f"Extract the following meeting data in valid JSON: {content}",
             session_id=session_id,
             user_id="default_user"
         )
         
-        # 3. Handle the JSON extraction
+        # Robust JSON cleaning
         raw_text = result.text.strip()
-        # Remove markdown if the model wrapped it
         if "```json" in raw_text:
             raw_text = raw_text.split("```json")[1].split("```")[0].strip()
         elif "```" in raw_text:
@@ -80,14 +80,10 @@ async def analyze_meeting(
 
         return json.loads(raw_text)
         
-    except json.JSONDecodeError as je:
-        print(f"JSON Error: {result.text}")
-        raise HTTPException(status_code=500, detail="Agent failed to produce valid JSON.")
     except Exception as e:
-        print(f"ADK Runner Error: {str(e)}")
+        print(f"ADK Final Error Trace: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-        
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
