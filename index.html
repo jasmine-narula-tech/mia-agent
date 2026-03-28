@@ -201,7 +201,8 @@
         const session = localStorage.getItem('mia_session') || `ADK-${Math.random().toString(36).substr(2, 5).toUpperCase()}`;
         formData.append('session_id', session);
         localStorage.setItem('mia_session', session);
-
+        
+        //executing reasoning engine
         try {
             addLog(`ENGINE: Executing reasoning loop for ${session}...`, 'text-amber-400');
             const response = await fetch('/analyze', { method: 'POST', body: formData });
@@ -225,11 +226,11 @@
         
         document.getElementById('summary').innerText = data.summary || "No summary available.";
         
-        // FIX #3: Map any tone to Neutral/Positive/Negative
+        // Map any tone to Neutral/Positive/Negative
         const toneStr = data.tone ? data.tone.toString() : "Neutral";
         document.getElementById('tone').innerText = toneStr;
 
-        // FIX #1: Productivity Score safety (handles 50/10 vs 5/10)
+        //  Productivity Score safety
         let score = data.productivity_score || 0;
         if (score > 10) score = Math.round(score / 10);
         document.getElementById('productivity').innerText = `${score}/10`;
@@ -270,7 +271,6 @@
             </div>
         `).join('');
 
-        // FIX #2: Ensuring Decisions list is visible even if format is slightly off
         const decisions = data.decisions || [];
         document.getElementById('tab-decisions').innerHTML = decisions.map(d => {
             const decisionText = (typeof d === 'string') ? d : JSON.stringify(d);

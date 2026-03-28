@@ -4,20 +4,17 @@ import uvicorn
 from typing import Optional
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse
-
-# Stable 2026 ADK Imports
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.apps import App
 from google.genai import types
 
-# --- DEFINITIONS AT TOP LEVEL (GLOBAL SCOPE) ---
-MIA_APP_NAME = "MIA_Manager"  # <--- DEFINED HERE FIRST
+# DEFINITIONS AT TOP LEVEL 
+MIA_APP_NAME = "MIA_Manager" 
 session_service = InMemorySessionService()
 
 # Define the Agent with the Strict Tone and Schema
-# Updated Agent with "Strict Single-Digit" and "List of Strings" rules
 mia_agent = Agent(
     name="MIA_Meeting_Agent",
     model="gemini-2.5-flash-lite", 
@@ -46,7 +43,6 @@ mia_app = App(name=MIA_APP_NAME, root_agent=mia_agent)
 
 app = FastAPI(title="MIA - Final Polish")
 
-# --- ROUTES ---
 
 @app.get("/", response_class=HTMLResponse)
 async def get_ui():
@@ -71,13 +67,13 @@ async def analyze_meeting(
         # Handle existing sessions gracefully
         try:
             await session_service.create_session(
-                app_name=MIA_APP_NAME, # <--- Function can now see this
+                app_name=MIA_APP_NAME, 
                 user_id="default_user", 
                 session_id=session_id
             )
         except Exception as e:
             if "already exists" in str(e):
-                pass # Already initialized, this is fine
+                pass 
             else:
                 raise e
 
