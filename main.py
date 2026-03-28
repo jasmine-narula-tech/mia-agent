@@ -20,7 +20,7 @@ session_service = InMemorySessionService()
 # 2. Define the Agent
 mia_agent = Agent(
     name="MIA_Meeting_Agent",
-    model="gemini-2.0-flash", 
+    model="gemini-1.5-flash", 
     instruction="Analyze meeting transcripts. Extract action items, decisions, and blockers. Return strict JSON."
 )
 
