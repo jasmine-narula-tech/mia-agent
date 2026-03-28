@@ -18,33 +18,26 @@ app = FastAPI(title="MIA - Zero Error Edition")
 session_service = InMemorySessionService()
 
 # 2. Define the Agent
+# Updated Agent with Strict Tone and Schema
 mia_agent = Agent(
     name="MIA_Meeting_Agent",
     model="gemini-2.5-flash-lite", 
     instruction=(
-        "You are an expert meeting analyst. Analyze the transcript and return ONLY a JSON object "
-        "with this exact structure: "
+        "You are an expert meeting analyst. Return ONLY a JSON object. "
+        "The 'tone' MUST be one of these three words: 'Positive', 'Negative', or 'Neutral'. "
+        "Format decisions as a simple list of strings. "
+        "Strict Schema: "
         "{"
-        "  'summary': 'A 2-sentence overview',"
-        "  'tone': 'Professional/Casual/Tense',"
-        "  'productivity_score': 1-10 integer,"
-        "  'engagement': {'PersonName': 'High/Med/Low'},"
-        "  'action_items': [{'task': '...', 'assigned_to': '...', 'deadline': '...'}],"
-        "  'decisions': ['Decision 1', 'Decision 2'],"
-        "  'blockers': ['Risk 1']"
+        "  'summary': 'string',"
+        "  'tone': 'Positive' | 'Negative' | 'Neutral',"
+        "  'productivity_score': number,"
+        "  'engagement': {'Name': 'Level'},"
+        "  'action_items': [{'task': 'string', 'assigned_to': 'string', 'deadline': 'string'}],"
+        "  'decisions': ['string'],"
+        "  'blockers': ['string']"
         "}"
     )
 )
-
-# 3. Wrap in an App (This prevents the 'Session Not Found' mismatch)
-# The App name MUST match the name used in your session creation
-MIA_APP_NAME = "MIA_Manager"
-mia_app = App(name=MIA_APP_NAME, root_agent=mia_agent)
-
-@app.get("/", response_class=HTMLResponse)
-async def get_ui():
-    with open("index.html", "r") as f:
-        return f.read()
 
 @app.post("/analyze")
 async def analyze_meeting(
@@ -52,37 +45,32 @@ async def analyze_meeting(
     transcript_file: Optional[UploadFile] = File(None),
     session_id: str = Form("default_session")
 ):
-    content = ""
+    # ... (content extraction logic remains the same) ...
+    content = transcript_text or ""
     if transcript_file and transcript_file.filename:
         content = (await transcript_file.read()).decode("utf-8")
-    elif transcript_text:
-        content = transcript_text
-
-    if not content.strip():
-        raise HTTPException(status_code=400, detail="Transcript is empty.")
 
     try:
-        # ✅ STEP 1: Create the session and WAIT for it
-        # This ensures the ID exists in the service before the runner looks for it
-        await session_service.create_session(
-            app_name=MIA_APP_NAME, 
-            user_id="default_user", 
-            session_id=session_id
-        )
+        # ✅ FIX for Point #1: Handle existing sessions gracefully
+        try:
+            await session_service.create_session(
+                app_name=MIA_APP_NAME, 
+                user_id="default_user", 
+                session_id=session_id
+            )
+        except Exception as e:
+            if "already exists" in str(e):
+                print(f"Session {session_id} active. Continuing...")
+            else:
+                raise e
 
-        # ✅ STEP 2: Initialize Runner with the APP object
-        runner = Runner(
-            app=mia_app,  # Using 'app' instead of 'agent' fixes the lookup error
-            session_service=session_service
-        )
-
-        # ✅ STEP 3: Format the message correctly
+        runner = Runner(app=mia_app, session_service=session_service)
+        
         user_message = types.Content(
             role="user",
-            parts=[types.Part(text=f"Analyze this transcript and return JSON: {content}")]
+            parts=[types.Part(text=f"Analyze: {content}")]
         )
 
-        # ✅ STEP 4: Run and collect response
         final_text = ""
         async for event in runner.run_async(
             user_id="default_user",
@@ -92,7 +80,7 @@ async def analyze_meeting(
             if event.is_final_response():
                 final_text = event.content.parts[0].text
 
-        # Standard JSON cleaning
+        # Clean JSON
         raw_text = final_text.strip()
         if "```json" in raw_text:
             raw_text = raw_text.split("```json")[1].split("```")[0].strip()
@@ -103,8 +91,8 @@ async def analyze_meeting(
         
     except Exception as e:
         print(f"ADK Debug: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Runner Error: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=str(e))
+        
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
