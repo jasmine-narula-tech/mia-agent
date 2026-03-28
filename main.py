@@ -17,18 +17,22 @@ MIA_APP_NAME = "MIA_Manager"  # <--- DEFINED HERE FIRST
 session_service = InMemorySessionService()
 
 # Define the Agent with the Strict Tone and Schema
+# Updated Agent with "Strict Single-Digit" and "List of Strings" rules
 mia_agent = Agent(
     name="MIA_Meeting_Agent",
     model="gemini-2.5-flash-lite", 
     instruction=(
         "You are an expert meeting analyst. Return ONLY a JSON object. "
-        "The 'tone' MUST be one of these three words: 'Positive', 'Negative', or 'Neutral'. "
-        "Format decisions as a simple list of strings. "
-        "Strict Schema: "
+        "RULES:"
+        "1. 'productivity_score' MUST be a single-digit integer from 1 to 10 (e.g., 8)."
+        "2. 'tone' MUST be one of: 'Positive', 'Negative', or 'Neutral'."
+        "3. 'decisions' MUST be a simple list of strings (e.g., ['Decision A', 'Decision B'])."
+        "4. 'summary' must be exactly 2 sentences."
+        "Strict Schema:"
         "{"
         "  'summary': 'string',"
         "  'tone': 'Positive' | 'Negative' | 'Neutral',"
-        "  'productivity_score': number,"
+        "  'productivity_score': 8,"
         "  'engagement': {'Name': 'Level'},"
         "  'action_items': [{'task': 'string', 'assigned_to': 'string', 'deadline': 'string'}],"
         "  'decisions': ['string'],"
