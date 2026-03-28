@@ -9,16 +9,14 @@ from fastapi.responses import HTMLResponse
 from google.adk.agents import Agent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
-from google.adk.apps import App  # <--- Added this to fix "Session not found"
+from google.adk.apps import App
 from google.genai import types
 
-app = FastAPI(title="MIA - Zero Error Edition")
-
-# 1. Global Session Service
+# --- DEFINITIONS AT TOP LEVEL (GLOBAL SCOPE) ---
+MIA_APP_NAME = "MIA_Manager"  # <--- DEFINED HERE FIRST
 session_service = InMemorySessionService()
 
-# 2. Define the Agent
-# Updated Agent with Strict Tone and Schema
+# Define the Agent with the Strict Tone and Schema
 mia_agent = Agent(
     name="MIA_Meeting_Agent",
     model="gemini-2.5-flash-lite", 
@@ -39,28 +37,43 @@ mia_agent = Agent(
     )
 )
 
+# Initialize the App object
+mia_app = App(name=MIA_APP_NAME, root_agent=mia_agent)
+
+app = FastAPI(title="MIA - Final Polish")
+
+# --- ROUTES ---
+
+@app.get("/", response_class=HTMLResponse)
+async def get_ui():
+    # Ensure index.html is in the same directory
+    with open("index.html", "r") as f:
+        return f.read()
+
 @app.post("/analyze")
 async def analyze_meeting(
     transcript_text: Optional[str] = Form(None),
     transcript_file: Optional[UploadFile] = File(None),
     session_id: str = Form("default_session")
 ):
-    # ... (content extraction logic remains the same) ...
     content = transcript_text or ""
     if transcript_file and transcript_file.filename:
         content = (await transcript_file.read()).decode("utf-8")
 
+    if not content.strip():
+        raise HTTPException(status_code=400, detail="Transcript is empty.")
+
     try:
-        # ✅ FIX for Point #1: Handle existing sessions gracefully
+        # Handle existing sessions gracefully
         try:
             await session_service.create_session(
-                app_name=MIA_APP_NAME, 
+                app_name=MIA_APP_NAME, # <--- Function can now see this
                 user_id="default_user", 
                 session_id=session_id
             )
         except Exception as e:
             if "already exists" in str(e):
-                print(f"Session {session_id} active. Continuing...")
+                pass # Already initialized, this is fine
             else:
                 raise e
 
@@ -80,7 +93,7 @@ async def analyze_meeting(
             if event.is_final_response():
                 final_text = event.content.parts[0].text
 
-        # Clean JSON
+        # Clean JSON and Return
         raw_text = final_text.strip()
         if "```json" in raw_text:
             raw_text = raw_text.split("```json")[1].split("```")[0].strip()
@@ -92,7 +105,7 @@ async def analyze_meeting(
     except Exception as e:
         print(f"ADK Debug: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-        
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
