@@ -21,7 +21,19 @@ session_service = InMemorySessionService()
 mia_agent = Agent(
     name="MIA_Meeting_Agent",
     model="gemini-2.5-flash-lite", 
-    instruction="Analyze meeting transcripts. Extract action items, decisions, and blockers. Return strict JSON."
+    instruction=(
+        "You are an expert meeting analyst. Analyze the transcript and return ONLY a JSON object "
+        "with this exact structure: "
+        "{"
+        "  'summary': 'A 2-sentence overview',"
+        "  'tone': 'Professional/Casual/Tense',"
+        "  'productivity_score': 1-10 integer,"
+        "  'engagement': {'PersonName': 'High/Med/Low'},"
+        "  'action_items': [{'task': '...', 'assigned_to': '...', 'deadline': '...'}],"
+        "  'decisions': ['Decision 1', 'Decision 2'],"
+        "  'blockers': ['Risk 1']"
+        "}"
+    )
 )
 
 # 3. Wrap in an App (This prevents the 'Session Not Found' mismatch)
